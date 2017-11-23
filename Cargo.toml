@@ -3,7 +3,13 @@ name = "mp4parse_fallible"
 version = "0.0.1"
 authors = ["The Servo Project Developers"]
 license = "MPL-2.0"
-publish = false
+
+description = "Fallible replacement for Vec"
+documentation = "https://docs.rs/mp4parse_fallible/"
+repository = "https://github.com/mozilla/mp4parse_fallible"
+
+[badges]
+travis-ci = { repository = "https://github.com/mozilla/mp4parse_fallible" }
 
 [lib]
 name = "mp4parse_fallible"
