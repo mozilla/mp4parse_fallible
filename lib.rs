@@ -85,7 +85,7 @@ fn try_extend_vec<T>(vec: &mut Vec<T>, new_cap: usize) -> Result<(), ()> {
 #[test]
 fn oom_test() {
     let mut vec: Vec<char> = Vec::new();
-    match vec.try_reserve(std::usize::MAX) {
+    match FallibleVec::try_reserve(&mut vec, std::usize::MAX) {
         Ok(_) => panic!("it should be OOM"),
         _ => (),
     }
