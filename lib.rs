@@ -18,6 +18,11 @@ pub trait FallibleVec<T> {
     /// Expand the vector size. Return Ok(()) on success, Err(()) if it
     /// fails.
     fn try_reserve(&mut self, new_cap: usize) -> Result<(), ()>;
+
+    /// Clones and appends all elements in a slice to the Vec.
+    /// Returns Ok(()) on success, Err(()) if it fails, which can
+    /// only be due to lack of memory.
+    fn try_extend_from_slice(&mut self, other: &[T]) -> Result<(), ()> where T: Clone;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -40,9 +45,16 @@ impl<T> FallibleVec<T> for Vec<T> {
 
     #[inline]
     fn try_reserve(&mut self, cap: usize) -> Result<(), ()> {
-        let new_cap = cap + self.capacity();
+        let new_cap = cap.checked_add(self.capacity()).ok_or(())?;
         try_extend_vec(self, new_cap)?;
         debug_assert!(self.capacity() == new_cap);
+        Ok(())
+    }
+
+    #[inline]
+    fn try_extend_from_slice(&mut self, other: &[T]) -> Result<(), ()> where T: Clone {
+        FallibleVec::try_reserve(self, other.len())?;
+        self.extend_from_slice(other);
         Ok(())
     }
 }
@@ -89,4 +101,20 @@ fn oom_test() {
         Ok(_) => panic!("it should be OOM"),
         _ => (),
     }
+}
+
+#[test]
+fn capacity_overflow_test() {
+    let mut vec = vec![1];
+    match FallibleVec::try_reserve(&mut vec, std::usize::MAX) {
+        Ok(_) => panic!("capacity calculation should overflow"),
+        _ => (),
+    }
+}
+
+#[test]
+fn extend_from_slice_test() {
+    let mut vec = b"foo".to_vec();
+    FallibleVec::try_extend_from_slice(&mut vec, b"bar").unwrap();
+    assert_eq!(&vec, b"foobar");
 }
