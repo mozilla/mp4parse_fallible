@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use std::io::Read;
+use std::convert::TryInto as _;
 use std::mem;
 use std::vec::Vec;
 
@@ -26,6 +28,27 @@ pub trait FallibleVec<T> {
     /// Returns Ok(()) on success, Err(()) if it fails, which can
     /// only be due to lack of memory.
     fn try_extend_from_slice(&mut self, other: &[T]) -> Result<(), ()> where T: Clone;
+}
+
+/// Reserves the upper limit of what `src` can generate before reading all
+/// bytes until EOF in this source, placing them into buf. If the allocation
+/// is unsuccessful, or reading from the source generates an error before
+/// reaching EOF, this will return an error. Otherwise, it will return the
+/// number of bytes read.
+///
+/// Since `src.limit()` may return a value greater than the number of bytes
+/// which can be read from the source, it's possible this function may fail
+/// in the allocation phase even though allocating the number of bytes available
+/// to read would have succeeded. In general, it is assumed that the callers
+/// have accurate knowledge of the number of bytes of interest and have created
+/// `src` accordingly.
+pub fn try_read_to_end<T>(src: &mut std::io::Take<T>, buf: &mut Vec<u8>) -> Result<usize, ()>
+    where T: Read
+{
+    let limit: usize = src.limit().try_into().map_err(|_| ())?;
+    FallibleVec::try_reserve(buf, limit)?;
+    let bytes_read = src.read_to_end(buf).map_err(|_| ())?;
+    Ok(bytes_read)
 }
 
 /////////////////////////////////////////////////////////////////
@@ -133,4 +156,20 @@ fn extend_from_slice() {
     let mut vec = b"foo".to_vec();
     FallibleVec::try_extend_from_slice(&mut vec, b"bar").unwrap();
     assert_eq!(&vec, b"foobar");
+}
+
+#[test]
+fn try_read_to_end_() {
+    let mut src = b"1234567890".take(5);
+    let mut buf = vec![];
+    let bytes_read = try_read_to_end(&mut src, &mut buf).unwrap();
+    assert_eq!(bytes_read, 5);
+    assert_eq!(buf, b"12345");
+}
+
+#[test]
+fn try_read_to_end_oom() {
+    let mut src = b"1234567890".take(std::usize::MAX.try_into().expect("usize < u64"));
+    let mut buf = vec![];
+    assert!(try_read_to_end(&mut src, &mut buf).is_err());
 }
